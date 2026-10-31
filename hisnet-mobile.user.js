@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         히즈넷 모바일 (M0 실험판)
 // @namespace    hisnet-mobile
-// @version      0.0.1
+// @version      0.0.2
 // @description  M0 호환성 실험용입니다. 프레임·숨은 칸 안에서 실행되는지, 업데이트를 받는지 확인합니다. 학교 공식 도구가 아닙니다.
 // @match        https://hisnet.handong.edu/*
 // @run-at       document-start
@@ -21,9 +21,9 @@
   'use strict';
 
   // ---- 1. 설정 ----
-  var VERSION = '0.0.1';
-  var MARK_COLOR = '#1F7A47'; // 버전마다 색을 바꿔 업데이트가 됐는지 눈으로 확인
-  var MARK_NAME = '초록';
+  var VERSION = '0.0.2';
+  var MARK_COLOR = '#256EF4'; // 버전마다 색을 바꿔 업데이트가 됐는지 눈으로 확인
+  var MARK_NAME = '파랑';
   var PHONE_MAX = 768; // 이보다 좁은 기기에서만 동작
 
   var root = document.documentElement;
