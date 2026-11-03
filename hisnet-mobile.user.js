@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         히즈넷 모바일
 // @namespace    hisnet-mobile
-// @version      0.2.0
+// @version      0.3.0
 // @description  폰에서 히즈넷을 글씨 크고 옆으로 밀 일 없는 화면으로 바꿔 줍니다. 학교 공식 도구가 아니며, 개인정보를 모으거나 보내지 않습니다.
 // @match        https://hisnet.handong.edu/*
 // @run-at       document-start
@@ -15,7 +15,7 @@
  *  1. 설정         바로가기·고위험 화면·그림 버튼 이름
  *  2. 시작         폰인지 확인 → 고위험 화면 확인 → hm-mode 확인 → 공통 CSS
  *  3. 도구         노드 옮기기(복제 X, 원래 화면에서는 제자리로) · 우리 요소 만들기 · 아이콘
- *  4. 화면별 꾸미기  F3 로그인 / F0 공통 틀 + F2 ☰ 메뉴 + 전체 메뉴 검색 (하나가 고장 나도 다른 건 동작)
+ *  4. 화면별 꾸미기  F3 로그인 / F4 메인 / F0 공통 틀 + F2 ☰ 메뉴 + 전체 메뉴 검색 / F5 게시판 / F6 시설예약(달력 칸 포함) (하나가 고장 나도 다른 건 동작)
  *  5. 공통 UI      원래 화면 버튼(F1)
  *  6. 안전망       기능마다 try/catch, 실패하면 그 기능만 원래대로
  *
@@ -149,7 +149,20 @@
     [/maintab\/student\/tab03_(on|off)_08\./, '즐겨찾기'],
     [/2012_images\/public\/btn_load\./, '불러오기'],
     [/main\/title_kyominfo_more\./, '더보기'],
-    [/main\/searchbar_right\./, '검색']
+    [/main\/searchbar_right\./, '검색'],
+    // 시설예약 (F6, 그림 확인 2026-11-03). yellow_02(패널티 미적용)는 링크가 아니라서 bookingMain이 글자 표로 바꿈
+    [/\/booking\/tab01(_on)?\.jpg/, '운동시설'],
+    [/\/booking\/tab02(_on)?\.jpg/, '회의실'],
+    [/\/booking\/tab03(_on)?\.jpg/, '편의시설'],
+    [/\/booking\/tab04(_on)?\.jpg/, '전용강의실'],
+    [/\/booking\/yellow_01\./, '패널티 정보'],
+    [/\/booking\/view_guide\./, '안내 보기'],
+    [/\/booking\/hide_guide\./, '안내 숨기기'],
+    [/\/booking\/prev_btn\./, '이전 두 달'], // 달력이 두 달씩 넘어감
+    [/\/booking\/next_btn\./, '다음 두 달'],
+    [/\/booking\/10day_prev2\./, '이전 10일'],
+    [/\/booking\/10day_next2\./, '다음 10일'],
+    [/\/booking\/btn_apply\./, '예약 신청']
   ];
 
   var FONT = '"Pretendard GOV", "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif';
@@ -591,6 +604,7 @@
     'html.hm-on table.hm-fw { width: 100% !important; table-layout: fixed; }',
     'html.hm-on .hm-fit img { max-width: 100% !important; height: auto !important; }',
     'html.hm-on .hm-fit iframe { max-width: 100% !important; }',
+    'html.hm-on .hm-fit iframe.hm-fw { width: 100% !important; }', // width="690" 같은 칸: auto면 300px로 줄어듦 (패널티 창의 벌점 목록)
     'html.hm-on .hm-fit td, html.hm-on .hm-fit th, html.hm-on .hm-fit a, html.hm-on .hm-fit span, html.hm-on .hm-fit font, html.hm-on .hm-fit div,',
     'html.hm-on .hm-fit p, html.hm-on .hm-fit li, html.hm-on .hm-fit b, html.hm-on .hm-fit strong, html.hm-on .hm-fit label, html.hm-on .hm-fit u, html.hm-on .hm-fit caption {',
     '  font-size: 16px !important; line-height: 1.55 !important; }',
@@ -798,10 +812,153 @@
     '.hm-class form[name="form_box1"] { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 8px 0; }'
   ].join('\n');
 
+  // F6 신청&예약: 시설예약 화면(hm-frame) + 달력 칸(hm-p-bkcal) + 안내 칸·패널티 창(hm-p-plain)
+  var CSS_BOOK = [
+    // 바로가기 앵커(#viewCC)로 내려갈 때 위쪽 바에 가리지 않게
+    'html.hm-on.hm-frame a[name] { scroll-margin-top: 64px; }',
+    'html.hm-on .hm-content iframe#calFrame, html.hm-on .hm-content iframe#infoFrame { display: block; width: 100% !important; max-width: 100% !important; }',
+    // 분류 탭 4개: 2×2 버튼
+    'html.hm-on .hm-bk-tabs, html.hm-on .hm-bk-tabs > tbody { display: block !important; width: auto !important; }',
+    'html.hm-on .hm-bk-tabs > tbody > tr { display: grid !important; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 16px; }',
+    'html.hm-on .hm-bk-tabs > tbody > tr > td { display: block !important; width: auto !important; }',
+    'html.hm-on .hm-fit .hm-bk-tabs a.hm-labeled { display: flex !important; width: 100%; margin: 0; box-sizing: border-box; }',
+    // 시설 묶음: 묶음마다 카드 (이름·패널티 표시 / 시설 버튼들)
+    'html.hm-on .hm-bk-list, html.hm-on .hm-bk-list > tbody, html.hm-on .hm-bk-list > tbody > tr, html.hm-on .hm-bk-list > tbody > tr > td {',
+    '  display: block !important; width: auto !important; height: auto !important; padding: 0 !important; background: none !important; }',
+    'html.hm-on .hm-bk-list > tbody > tr > td:empty, html.hm-on .hm-bk-list > tbody > tr:has(> td > img[src*="/booking/line"]) { display: none !important; }',
+    'html.hm-on .hm-bk-group { display: block !important; width: auto !important; margin: 0 0 12px; padding: 16px; border: 1px solid #CDD1D5; border-radius: 8px; background: #FFFFFF; box-sizing: border-box; }',
+    'html.hm-on .hm-bk-group > tbody, html.hm-on .hm-bk-group > tbody > tr { display: block !important; }',
+    'html.hm-on .hm-bk-group > tbody > tr > td { display: block !important; width: auto !important; padding: 0 !important; text-align: left !important; }',
+    'html.hm-on .hm-bk-group > tbody > tr > td:not(.hm-bk-name):not(.hm-bk-btns) { display: none !important; }', // 세로줄 그림 칸
+    'html.hm-on .hm-bk-name { margin: 0 0 12px !important; }',
+    'html.hm-on .hm-bk-name strong { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }',
+    'html.hm-on .hm-content .hm-bk-name strong { font-size: 18px !important; font-weight: 700; color: #131416; }',
+    'html.hm-on .hm-content .hm-bk-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; background: #F4F5F6; color: #6D7882; font-size: 13px !important; font-weight: 400; line-height: 1.4 !important; }',
+    'html.hm-on .hm-content .hm-bk-name a.hm-labeled { margin: 0; font-size: 15px !important; font-weight: 400; }',
+    'html.hm-on .hm-bk-btns table, html.hm-on .hm-bk-btns tbody { display: block !important; width: auto !important; }',
+    'html.hm-on .hm-bk-btns > table > tbody > tr { display: flex !important; flex-wrap: wrap; gap: 8px; }',
+    'html.hm-on .hm-bk-btns > table > tbody > tr > td { display: none !important; }',
+    'html.hm-on .hm-bk-btns > table > tbody > tr > td:has(> table) { display: block !important; width: auto !important; flex: 1 1 auto; }',
+    'html.hm-on .hm-bk-btns td:has(> table) > table > tbody > tr { display: block !important; }',
+    'html.hm-on .hm-bk-btns td[id$="_left"], html.hm-on .hm-bk-btns td[id$="_right"] { display: none !important; }',
+    'html.hm-on .hm-bk-btns td[id$="_center"] { display: block !important; width: auto !important; height: auto !important; padding: 0 !important; background: none !important; }',
+    'html.hm-on .hm-content .hm-bk-btns td[id$="_center"] > a { display: flex !important; align-items: center; justify-content: center; box-sizing: border-box; min-height: 48px; padding: 4px 14px;',
+    '  border: 1px solid #CDD1D5; border-radius: 6px; background: #FFFFFF; color: #131416 !important; font-size: 16px !important; text-align: center; text-decoration: none !important; }',
+    // 고른 시설: 원래 스크립트(changeBtnImg)가 배경 그림을 tab_btn02로 바꿈 → 파랑
+    'html.hm-on .hm-content .hm-bk-btns td[id$="_center"][style*="tab_btn02"] > a { border-color: #256EF4; background: #ECF2FE; color: #0B50D0 !important; font-weight: 700; }',
+    'html.hm-on .hm-content #div_Point div[id^="ln_"] { text-align: left !important; }',
+    'html.hm-on .hm-bk-stack { display: flex !important; flex-direction: column; }',
+    'html.hm-on .hm-bk-stack > #caledar, html.hm-on .hm-bk-stack > a[name="viewCC"] { order: 1; }',
+    'html.hm-on .hm-bk-stack > #div_Point { order: 2; margin: 16px 0 0; }',
+
+    // 안내 칸·패널티 창: 문서 하나를 폭 맞춤 (fitWidth)
+    'html.hm-on.hm-p-plain { overflow-x: hidden !important; }',
+    'html.hm-on.hm-p-plain body { margin: 0 !important; padding: 16px !important; min-width: 0 !important; width: auto !important; background: #FFFFFF !important;',
+    '  font-family: ' + FONT + '; color: #131416; overflow-wrap: anywhere; }',
+    'html.hm-on.hm-p-plain.hm-in-frame body { padding: 8px 0 !important; }',
+    'html.hm-on.hm-p-plain td[background], html.hm-on.hm-p-bkcal td[background] { background-image: none !important; }',
+    'html.hm-on.hm-p-plain td[width="28"], html.hm-on.hm-p-plain td[width="32"] { width: 0 !important; }', // 장식 테두리용 빈 칸
+    // 첫 줄의 빈 칸에 폭이 없는 표도 있어서(패널티 창) 고정 배치면 빈 칸이 절반을 차지함 → 내용대로
+    'html.hm-on.hm-p-plain table.hm-fw { table-layout: auto; }',
+
+    // 달력 칸 (PSTU420C)
+    'html.hm-on.hm-p-bkcal { overflow-x: hidden !important; }',
+    'html.hm-on.hm-p-bkcal body { margin: 0 !important; padding: 0 0 8px !important; min-width: 0 !important; width: auto !important; background: #FFFFFF !important;',
+    '  font-family: ' + FONT + '; color: #131416; }',
+    // 두 달 달력: [이전 두 달][다음 두 달] / 달력 / 달력
+    'html.hm-on .hm-bk-months, html.hm-on .hm-bk-months > tbody { display: block !important; width: 100% !important; height: auto !important; }',
+    'html.hm-on .hm-bk-months > tbody > tr:first-child { display: none !important; }',
+    'html.hm-on .hm-bk-months > tbody > tr:last-child { display: grid !important; grid-template-columns: 1fr 1fr; gap: 8px; }',
+    'html.hm-on .hm-bk-months > tbody > tr:last-child > td { display: block !important; width: auto !important; }',
+    'html.hm-on .hm-bk-months > tbody > tr:last-child > td:empty { display: none !important; }',
+    'html.hm-on .hm-bk-months td:has(> a > img[src*="prev_btn"]) { order: 1; }',
+    'html.hm-on .hm-bk-months td:has(> a > img[src*="next_btn"]) { order: 2; text-align: right; }',
+    'html.hm-on .hm-bk-months > tbody > tr:last-child > td:has(> table) { order: 3; grid-column: 1 / -1; margin: 8px 0 0; }',
+    'html.hm-on .hm-fit .hm-bk-months a.hm-labeled { display: flex !important; width: 100%; margin: 0; box-sizing: border-box; }',
+    'html.hm-on .hm-bk-months td > font, html.hm-on .hm-bk-months td > font * { font-size: 18px !important; }',
+    'html.hm-on .hm-bk-months table { width: 100% !important; margin: 4px 0 0; table-layout: fixed; }',
+    'html.hm-on .hm-bk-months table td { width: auto !important; height: 44px !important; padding: 2px !important; font-variant-numeric: tabular-nums; }',
+    'html.hm-on .hm-bk-months table tr:first-child td, html.hm-on .hm-bk-months table tr:first-child td * { font-size: 13px !important; }',
+    // 누를 수 있는 날(예약 가능한 날)은 파란 칸
+    'html.hm-on .hm-fit .hm-bk-months table td > a { display: flex; align-items: center; justify-content: center; width: 100%; min-width: 0; height: 100%; min-height: 40px;',
+    '  border-radius: 4px; background: #ECF2FE; text-decoration: none !important; }',
+    'html.hm-on .hm-bk-months table td > a, html.hm-on .hm-bk-months table td > a * { color: #0B50D0 !important; }',
+    // 고른 날짜·남은 시간 요약: 이름 | 값 두 칸
+    'html.hm-on.hm-p-bkcal td[background*="table_info_bg"] { height: auto !important; padding: 12px 16px !important; border-radius: 8px; background-color: #F4F5F6 !important; }',
+    'html.hm-on .hm-bk-sum { display: grid !important; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; width: 100% !important; }',
+    'html.hm-on .hm-bk-sum > tbody, html.hm-on .hm-bk-sum > tbody > tr { display: contents !important; }',
+    'html.hm-on .hm-bk-sum td { display: block !important; width: auto !important; height: auto !important; text-align: left !important; }',
+    'html.hm-on .hm-bk-sum td:empty { display: none !important; }',
+    'html.hm-on .hm-bk-sum > tbody > tr:first-child > td { grid-column: 1 / -1; margin: 0 0 4px; }',
+    'html.hm-on .hm-bk-sum > tbody > tr:nth-child(3) > td:nth-child(1) { order: 1; }',
+    'html.hm-on .hm-bk-sum > tbody > tr:nth-child(5) > td:nth-child(1) { order: 2; }',
+    'html.hm-on .hm-bk-sum > tbody > tr:nth-child(3) > td:nth-child(3) { order: 3; }',
+    'html.hm-on .hm-bk-sum > tbody > tr:nth-child(5) > td:nth-child(3) { order: 4; }',
+    'html.hm-on .hm-bk-sum > tbody > tr:nth-child(3) > td:nth-child(5) { order: 5; }',
+    'html.hm-on .hm-bk-sum > tbody > tr:nth-child(5) > td:nth-child(5) { order: 6; }',
+    'html.hm-on .hm-bk-sum > tbody > tr:nth-child(3) > td, html.hm-on .hm-bk-sum > tbody > tr:nth-child(3) > td * { font-size: 14px !important; font-weight: 400 !important; color: #6D7882; }',
+    'html.hm-on .hm-bk-sum > tbody > tr:nth-child(5) > td { text-align: right !important; white-space: nowrap; font-variant-numeric: tabular-nums; }',
+    // [이전 10일][다음 10일] / 색 설명
+    'html.hm-on .hm-bk-nav, html.hm-on .hm-bk-nav > tbody { display: block !important; width: 100% !important; }',
+    'html.hm-on .hm-bk-nav > tbody > tr { display: flex !important; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 0; }',
+    'html.hm-on .hm-bk-nav > tbody > tr:not(:has(a)) { display: none !important; }',
+    'html.hm-on .hm-bk-nav > tbody > tr > td { display: block !important; width: auto !important; }',
+    'html.hm-on .hm-bk-nav > tbody > tr > td:last-child { margin-left: auto; }',
+    'html.hm-on .hm-bk-nav > tbody > tr > td:not(:has(a)) { order: 3; flex: 1 1 100%; }',
+    'html.hm-on .hm-bk-nav td:not(:has(a)) > table > tbody > tr { display: grid !important; grid-template-columns: 20px 1fr 20px 1fr; align-items: center; gap: 6px; }',
+    'html.hm-on .hm-bk-nav td:not(:has(a)) > table > tbody > tr > td { display: block !important; width: auto !important; height: 20px !important; padding: 0 !important; line-height: 20px !important; }',
+    'html.hm-on .hm-bk-nav td:not(:has(a)) > table > tbody > tr > td:nth-child(odd) { border: 1px solid #CDD1D5; border-radius: 4px; }',
+    'html.hm-on .hm-bk-nav td:not(:has(a)) > table > tbody > tr > td table { display: none !important; }',
+    'html.hm-on .hm-bk-nav td:not(:has(a)) > table > tbody > tr > td:nth-child(1) { background: #E6E8EA !important; }',
+    'html.hm-on .hm-bk-nav td:not(:has(a)) > table > tbody > tr > td:nth-child(3) { background: #FFFFFF !important; }',
+    'html.hm-on .hm-bk-nav td:not(:has(a)) > table > tbody > tr > td:nth-child(even), html.hm-on .hm-bk-nav td:not(:has(a)) > table > tbody > tr > td:nth-child(even) * { font-size: 14px !important; }',
+    // 날짜 고르기 (우리 버튼, 하루씩 보이기만 바꿈): 5칸 × 2줄
+    '.hm-bk-days { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 16px 0 12px; }',
+    '.hm-bk-days button { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; min-height: 52px; margin: 0; padding: 4px 0;',
+    '  border: 1px solid #CDD1D5; border-radius: 6px; background: #FFFFFF; color: #131416; font: 700 15px/1.25 ' + FONT + '; font-variant-numeric: tabular-nums; cursor: pointer; }',
+    '.hm-bk-days small { font-size: 12px; font-weight: 400; color: #6D7882; }',
+    '.hm-bk-days button.hm-bk-day-closed { background: #F4F5F6; color: #8A949E; font-weight: 400; }',
+    '.hm-bk-days button[aria-pressed="true"] { border: 2px solid #256EF4; background: #ECF2FE; color: #0B50D0; font-weight: 700; }',
+    '.hm-bk-days button[aria-pressed="true"] small { color: #0B50D0; }',
+    'html.hm-on .hm-bk-grid > tbody > tr > td.hm-bk-day.hm-bk-off { display: none !important; }',
+    // 시간표: 하루 = 카드, 시간 줄 = "06시" + 15분 칸 4개
+    'html.hm-on .hm-bk-grid, html.hm-on .hm-bk-grid > tbody, html.hm-on .hm-bk-grid > tbody > tr { display: block !important; width: auto !important; }',
+    'html.hm-on .hm-bk-grid > tbody > tr > td { display: none !important; }', // 시간 열·사이 칸 (시간은 줄마다 붙임)
+    'html.hm-on .hm-bk-grid > tbody > tr > td.hm-bk-day { display: block !important; width: auto !important; margin: 0 0 12px; border: 1px solid #CDD1D5; border-radius: 8px; overflow: hidden; }',
+    'html.hm-on .hm-bk-day > table, html.hm-on .hm-bk-day > table > tbody, html.hm-on .hm-bk-day > table > tbody > tr { display: block !important; width: auto !important; height: auto !important; background: none !important; }',
+    'html.hm-on .hm-bk-day > table > tbody > tr:first-child > td { display: block !important; width: auto !important; padding: 12px 16px !important;',
+    '  background: #F4F5F6 !important; text-align: left !important; font-size: 17px !important; font-weight: 700; }',
+    'html.hm-on .hm-bk-day > table > tbody > tr:first-child > td br { display: none; }',
+    'html.hm-on.hm-p-bkcal .hm-bk-closed-note { display: block; margin: 2px 0 0; font-size: 14px !important; font-weight: 400; color: #6D7882; }',
+    'html.hm-on .hm-bk-closed > table > tbody > tr:not(:first-child) { display: none !important; }',
+    'html.hm-on .hm-bk-day > table > tbody > tr:not(:first-child) > td { display: flex !important; align-items: center; gap: 8px; width: auto !important; height: auto !important;',
+    '  padding: 6px 8px 6px 16px !important; border-top: 1px solid #E6E8EA; }',
+    'html.hm-on.hm-p-bkcal .hm-bk-hour { flex: none; width: 44px; font-size: 16px !important; font-weight: 700; font-variant-numeric: tabular-nums; }',
+    'html.hm-on .hm-bk-day td > table { display: grid !important; grid-template-columns: repeat(4, 1fr); gap: 4px; flex: 1 1 auto; width: auto !important; height: auto !important; background: none !important; }',
+    'html.hm-on .hm-bk-day td > table > tbody, html.hm-on .hm-bk-day td > table > tbody > tr { display: contents !important; }',
+    'html.hm-on .hm-bk-day td > table td[width="1"], html.hm-on .hm-bk-day td > table td[colspan] { display: none !important; }',
+    // 15분 칸: 색은 원래 뜻 그대로 (회색 예약불가 · 흰색 예약가능 · 노랑 고른 칸 · 주황 타인예약 · 연두 내 예약)
+    'html.hm-on .hm-bk-day td > table td { display: flex !important; align-items: center; justify-content: center; box-sizing: border-box; width: auto !important; height: auto !important; min-height: 44px;',
+    '  border: 1px solid transparent; border-radius: 6px; background: #E6E8EA; color: #8A949E; font-size: 0 !important; }',
+    'html.hm-on .hm-bk-day td > table td::before { font: 400 13px/1 ' + FONT + '; font-variant-numeric: tabular-nums; }',
+    'html.hm-on .hm-bk-day td > table tr:first-child > td:nth-child(1)::before { content: ":00"; }',
+    'html.hm-on .hm-bk-day td > table tr:first-child > td:nth-child(3)::before { content: ":15"; }',
+    'html.hm-on .hm-bk-day td > table tr:last-child > td:nth-child(1)::before { content: ":30"; }',
+    'html.hm-on .hm-bk-day td > table tr:last-child > td:nth-child(3)::before { content: ":45"; }',
+    'html.hm-on .hm-bk-day td > table td.bookingactYes { background: #FFFFFF !important; border-color: #8A949E; color: #131416; cursor: pointer; }',
+    'html.hm-on .hm-bk-day td > table td.bookingacton { background: #FFE699 !important; border: 2px solid #B88A00; color: #131416; }',
+    'html.hm-on .hm-bk-day td > table td.bookingacton::before { font-weight: 700; }',
+    'html.hm-on .hm-bk-day td > table td.bookingactNo { background: #FEB39A !important; color: #131416; }',
+    'html.hm-on .hm-bk-day td > table td.bookingactNoMy { background: #C4E3AA !important; color: #131416; }',
+    // 예약 신청 버튼: 큰 파란 버튼 (원래 그림 버튼을 대신 누름 → 확인 창·제출 그대로)
+    'html.hm-on input[src*="/booking/btn_apply"] + .hm-img-proxy { display: flex; width: 100%; height: 56px; margin: 8px 0 0;',
+    '  border: 0; border-radius: 8px; background: #256EF4; color: #FFFFFF; font-size: 17px; }'
+  ].join('\n');
+
   function addStyle() {
     var s = document.createElement('style');
     s.id = 'hm-style';
-    s.textContent = CSS_BASE + '\n' + CSS_LOGIN + '\n' + CSS_FRAME + '\n' + CSS_MAIN;
+    s.textContent = CSS_BASE + '\n' + CSS_LOGIN + '\n' + CSS_FRAME + '\n' + CSS_MAIN + '\n' + CSS_BOOK;
     (document.head || root).appendChild(s);
   }
 
@@ -896,8 +1053,8 @@
   }
 
   // 화면 폭에 맞추기: 고정 폭 풀기 → 넘치는 표를 바깥부터 카드/세로 쌓기 → 그래도 넘치면 표 안 스크롤(임시)
-  function fitWidth(scope, F) {
-    scope.classList.add('hm-fit');
+  // 고정 폭(width="753", style="width:750px") 풀기
+  function unfixWidths(scope) {
     var all = scope.querySelectorAll('[width], [style*="width"]');
     for (var i = 0; i < all.length; i++) {
       var e = all[i];
@@ -906,6 +1063,16 @@
       var sw = /(^|;)\s*width\s*:\s*(\d+)px/i.exec(e.getAttribute('style') || '');
       if ((w && !/%/.test(e.getAttribute('width')) && w >= 120) || (sw && +sw[2] >= 120)) e.classList.add('hm-fw');
     }
+  }
+
+  // 카드로 바꾼 표(hm-carded)·화면별 코드가 직접 배치한 표(hm-own)는 자동 정리에서 뺌
+  function handled(t) {
+    return t.classList.contains('hm-carded') || t.classList.contains('hm-own');
+  }
+
+  function fitWidth(scope, F) {
+    scope.classList.add('hm-fit');
+    unfixWidths(scope);
     labelImageLinks(scope);
     markPagers(scope);
 
@@ -916,7 +1083,7 @@
     };
     var tables = function () {
       return [].filter.call(scope.querySelectorAll('table'), function (t) {
-        return !t.classList.contains('hm-carded') && !t.closest('.hm-ui') && !isHidden(t);
+        return !handled(t) && !t.closest('.hm-ui, .hm-own') && !isHidden(t);
       });
     };
 
@@ -930,7 +1097,7 @@
     [].forEach.call(scope.querySelectorAll('select, textarea, input[type="text"], input:not([type]), td > a, td > font > a'), function (c) {
       var t = c.closest('table');
       var cell = c.closest('td, th');
-      if (!t || !cell || !scope.contains(t) || t.classList.contains('hm-block') || t.classList.contains('hm-carded') || isHidden(c)) return;
+      if (!t || !cell || !scope.contains(t) || t.classList.contains('hm-block') || handled(t) || t.closest('.hm-own') || isHidden(c)) return;
       var cw = cell.getBoundingClientRect().width;
       if (cw < 44 || c.getBoundingClientRect().width > cw + 1) t.classList.add('hm-block');
     });
@@ -1072,6 +1239,165 @@
     if (!box.firstChild) return;
     content.insertBefore(box, content.firstChild);
     F.created.push(box);
+  }
+
+  // ---- F6 시설예약 (/prof/booking/PSTU420M.php) ----
+  // 분류 탭(그림) → 시설 묶음(이름 | 시설 버튼) → 이용안내 칸(infoFrame) → 달력 칸(calFrame, 안쪽 문서는 bookingCal 화면이 맡음).
+  // 원래 버튼(viewCaleder·changeBtnImg 링크)은 그대로 두고 배치·크기만 바꿈. 직접 배치한 표는 hm-own (자동 정리에서 뺌)
+  function own(t) {
+    t.classList.add('hm-own');
+    [].forEach.call(t.querySelectorAll('table'), function (x) { x.classList.add('hm-own'); });
+  }
+
+  function bookingMain(content, F) {
+    var title = content.querySelector('img[src*="/student/title_s_"]');
+    if (title) {
+      // 큰 제목 그림 줄과 그 위 빈 줄 (위쪽 바에 화면 이름이 있음)
+      var tr = title.closest('tr');
+      tr.classList.add('hm-orig-hidden');
+      if (tr.previousElementSibling && !textOf(tr.previousElementSibling)) tr.previousElementSibling.classList.add('hm-orig-hidden');
+    }
+
+    var tab = content.querySelector('a[href*="PSTU420M.php?gubun="]');
+    var tabs = tab && tab.closest('table');
+    if (tabs) {
+      tabs.classList.add('hm-bk-tabs');
+      own(tabs);
+    }
+
+    // 시설 묶음 표(748px)가 모인 표. 시설 버튼이 하나도 없는 묶음도 있음 (회의실 탭의 미디어랩)
+    var first = content.querySelector('a[href^="javascript:viewCaleder"]');
+    var firstGroup = first && first.closest('table[width="748"]');
+    var list = firstGroup && firstGroup.parentNode.closest('table');
+    if (list) {
+      [].forEach.call(list.querySelectorAll('table[width="748"]'), function (group) {
+        var cells = group.rows[0] && group.rows[0].cells;
+        if (!cells || cells.length < 2 || group.parentNode.closest('table[width="748"]')) return;
+        group.classList.add('hm-bk-group');
+        cells[0].classList.add('hm-bk-name');
+        cells[cells.length - 1].classList.add('hm-bk-btns');
+      });
+      list.classList.add('hm-bk-list');
+      own(list);
+    }
+
+    // 달력을 이용안내보다 위로: 폰에선 안내가 길어서(약 1,100px) 시설을 누르면 내려간 자리(#viewCC)가 안내 칸이 늘면서 밀려남.
+    // 칸(iframe)은 옮기면 처음 주소로 다시 불러와지므로 노드는 그대로 두고 CSS 순서(order)로만 바꿈
+    var point = document.getElementById('div_Point');
+    if (point && document.getElementById('caledar') && content.contains(point)) point.parentNode.classList.add('hm-bk-stack');
+
+    // "패널티 미적용" 그림(링크 아님) → 글자 표시
+    [].forEach.call(content.querySelectorAll('img[src*="/booking/yellow_02"]'), function (img) {
+      var badge = el('span', 'hm-bk-badge', '패널티 미적용');
+      img.classList.add('hm-orig-hidden');
+      img.parentNode.insertBefore(badge, img.nextSibling);
+      F.created.push(badge);
+    });
+  }
+
+  // 숨은 칸(iframe) 안 문서: 모양이 바뀌면 내용 높이도 바뀌므로 칸 높이를 내용에 맞춤 (같은 사이트라 가능, PRD F6).
+  // 원래 화면도 칸이 열릴 때 한 번 높이를 맞추는데(reSize), 그 뒤에 우리 것이 한 번 더 맞춤.
+  // 크기 알림(ResizeObserver)은 화면이 그려질 때만 오므로 모드를 바꿀 때·날짜를 바꿀 때도 직접 부름 (fitFrame)
+  var fitFrame = function () {};
+
+  function syncFrameHeight() {
+    var fe;
+    try {
+      fe = window.frameElement;
+    } catch (e) {
+      return;
+    }
+    if (!fe || fe.tagName !== 'IFRAME') return;
+    var update = function () {
+      var h = 0;
+      [].forEach.call(document.body.children, function (c) {
+        var r = c.getBoundingClientRect();
+        if (r.height) h = Math.max(h, r.bottom);
+      });
+      h = Math.ceil(h + window.scrollY);
+      if (h > 0 && Math.abs(fe.getBoundingClientRect().height - h) > 2) fe.style.height = h + 'px';
+    };
+    fitFrame = update;
+    update();
+    window.addEventListener('load', function () { setTimeout(update, 50); });
+    if (window.ResizeObserver) new ResizeObserver(update).observe(document.body);
+  }
+
+  // 달력 칸 안 시간표: 하루(열) = 카드, 시간 줄마다 "06시" 글자를 붙이고 15분 칸 4개를 한 줄로 (CSS).
+  // 15분 칸은 원래 칸(onclick=selectDate) 그대로라 고르는 규칙·확인 창·제출이 원래와 같음
+  function bookingGrid(form, F) {
+    var timeCell = [].filter.call(form.querySelectorAll('td'), function (td) { return textOf(td) === 'Time'; })[0];
+    var timeTable = timeCell && timeCell.closest('table');
+    var row = timeTable && timeTable.closest('td') && timeTable.closest('td').parentNode;
+    if (!row) return false;
+    var hours = [].slice.call(timeTable.rows, 1).map(function (r) {
+      var m = /^(\d{1,2}):(\d{2})/.exec(textOf(r));
+      if (!m) return textOf(r);
+      return (m[2] === '00' ? m[1] + '시' : m[1] + ':' + m[2]);
+    });
+    var days = [].filter.call(row.cells, function (td) {
+      var t = td.querySelector(':scope > table');
+      return t && t !== timeTable && t.rows.length === hours.length + 1;
+    });
+    if (!days.length) return false;
+    var grid = row.closest('table');
+    grid.classList.add('hm-bk-grid');
+    own(grid);
+
+    // 날짜 고르기: 10일을 다 펼치면 매우 길어서(회의실은 하루 18시간 × 10일 ≈ 12,000px) 하루씩 보여 줌.
+    // 보이기만 바꾸는 우리 버튼이라 원래 동작과 상관없음 (숨긴 날에 골라 둔 칸도 그대로)
+    var nav = el('div', 'hm-bk-days');
+    nav.setAttribute('role', 'group');
+    nav.setAttribute('aria-label', '날짜 고르기');
+    var buttons = [];
+    var show = function (idx) {
+      days.forEach(function (td, k) { td.classList.toggle('hm-bk-off', k !== idx); });
+      buttons.forEach(function (b, k) { b.setAttribute('aria-pressed', k === idx ? 'true' : 'false'); });
+      fitFrame();
+    };
+    days.forEach(function (td, idx) {
+      var t = td.querySelector(':scope > table');
+      td.classList.add('hm-bk-day');
+      for (var i = 1; i < t.rows.length; i++) {
+        var cell = t.rows[i].cells[0];
+        if (!cell) continue;
+        var hour = el('span', 'hm-bk-hour', hours[i - 1]);
+        cell.insertBefore(hour, cell.firstChild);
+        F.created.push(hour);
+      }
+      var head = t.rows[0].cells[0];
+      var day = [].map.call(head.childNodes, textOf).filter(Boolean).join(' '); // "11-03<br>화요일" → "11-03 화요일"
+      var br = head.querySelector('br');
+      if (br) {
+        var sp = el('span', '', ' '); // 줄바꿈 대신 띄어쓰기 (br은 CSS로 숨김)
+        head.insertBefore(sp, br);
+        F.created.push(sp);
+      }
+      var open = !!td.querySelector('td[onclick], .bookingactNo, .bookingactNoMy');
+      if (!open) {
+        td.classList.add('hm-bk-closed');
+        var note = el('span', 'hm-bk-closed-note', '예약할 수 있는 시간이 없어요');
+        head.appendChild(note);
+        F.created.push(note);
+      }
+      var parts = day.split(' '); // ["11-04", "수요일"]
+      var b = el('button', open ? '' : 'hm-bk-day-closed');
+      b.type = 'button';
+      b.setAttribute('aria-label', day + (open ? '' : ', 예약할 수 있는 시간 없음'));
+      b.appendChild(el('small', '', (parts[1] || '').replace('요일', '')));
+      b.appendChild(document.createTextNode(parts[0]));
+      b.addEventListener('click', function () { show(idx); });
+      nav.appendChild(b);
+      buttons.push(b);
+    });
+    if (days.length > 1) {
+      var first = 0;
+      while (first < days.length && days[first].classList.contains('hm-bk-closed')) first++;
+      show(first < days.length ? first : 0);
+      grid.parentNode.insertBefore(nav, grid);
+      F.created.push(nav);
+    }
+    return true;
   }
 
   // ---- 4. 화면별 꾸미기 ----
@@ -1363,6 +1689,45 @@
   });
 
   // F0 공통 틀 (위쪽 메뉴 #div_TopmenuBg + 1000px 표[왼쪽 메뉴 | 내용]) + F2 ☰ 메뉴
+  // F6 시설예약 달력 칸 (/prof/booking/PSTU420C.php — 시설예약 화면의 calFrame 안. 날짜를 누르면 이 칸만 새로 열림)
+  // 공통 틀이 없는 문서라 표 정리는 직접: 두 달 달력은 세로로, 요약은 이름|값, 시간표는 하루씩 카드 (bookingGrid)
+  screens.push({
+    name: 'bookingCal',
+    cls: 'hm-p-bkcal',
+    match: function () { return PATH === '/prof/booking/PSTU420C.php'; },
+    run: function (F) {
+      var form = document.forms.bookingform;
+      if (!form || !bookingGrid(form, F)) return false;
+      var body = document.body;
+      body.classList.add('hm-fit'); // 글자 16px·누르는 곳 44px·그림 버튼 글자 (fitWidth의 표 정리는 쓰지 않음)
+      unfixWidths(body);
+      var prev = body.querySelector('a > img[src*="/booking/prev_btn"]');
+      if (prev) prev.closest('table').classList.add('hm-bk-months');
+      var sum = body.querySelector('td[background*="table_info_bg"] > table');
+      if (sum) sum.classList.add('hm-bk-sum');
+      var ten = body.querySelector('a > img[src*="/booking/10day_"]');
+      if (ten) ten.closest('table').classList.add('hm-bk-nav');
+      labelImageLinks(body);
+      syncFrameHeight();
+      return true;
+    }
+  });
+
+  // 시설예약의 이용안내 칸(infoFrame)·패널티 정보 새 창과 그 안의 벌점 목록: 문서 하나를 폭 맞춤
+  var PLAIN_PAGES = ['/prof/booking/PSTU420N.php', '/prof/booking/PSTU422P.php', '/prof/booking/PSTU422L.php'];
+  screens.push({
+    name: 'plain',
+    cls: 'hm-p-plain',
+    match: function () { return PLAIN_PAGES.indexOf(PATH) !== -1; },
+    run: function (F) {
+      if (!document.body.querySelector('table')) return false;
+      if (frameKind() === 'IFRAME') root.classList.add('hm-in-frame');
+      fitWidth(document.body, F);
+      syncFrameHeight();
+      return true;
+    }
+  });
+
   screens.push({
     name: 'frame',
     cls: 'hm-frame',
@@ -1405,6 +1770,11 @@
           if (PATH === '/myboard/list.php') boardTools(content, F); // 글 읽기 화면에선 검색이 글 위로 오면 안 됨
           boardList(content, F); // 글 읽기 화면 아래에도 같은 목록이 있음
         } catch (e) { /* 게시판 꾸미기만 포기, 목록 표는 아래 자동 정리로 */ }
+      }
+      if (PATH === '/prof/booking/PSTU420M.php') {
+        try {
+          bookingMain(content, F);
+        } catch (e) { /* 시설예약 꾸미기만 포기, 아래 자동 정리로 */ }
       }
 
       if (subCell) fitWidth(subCell, F);
@@ -1706,6 +2076,7 @@
     root.style.setProperty('--hm-z', String(z));
     var btn = document.getElementById('hm-toggle');
     if (btn) btn.textContent = mobile ? '원래 화면' : '모바일 화면';
+    fitFrame();
   }
 
   function addToggle() {
@@ -1774,6 +2145,12 @@
       if (readMode() === 'mobile') applyMode('mobile');
       else applyMode('original');
       if (recognized || readMode() === 'original') addToggle();
+      // 숨은 칸(달력 칸 등)에는 버튼이 없으므로 바깥 문서에서 모드를 바꾸면 따라 바꿈 (같은 탭의 다른 문서에서 저장하면 storage 알림이 옴)
+      if (!OWNS_VIEWPORT) {
+        window.addEventListener('storage', function (e) {
+          if (e.key === 'hm-mode') applyMode(readMode());
+        });
+      }
       // 못 알아본 화면이 프레임 안에 열리면 바깥 화면 설정을 원래대로 (로그인 → 메인 이동 등)
       if (!recognized && frameKind() === 'FRAME') {
         try { setViewport(window.top.document, 'original', root.scrollWidth); } catch (e) { /* 무시 */ }
