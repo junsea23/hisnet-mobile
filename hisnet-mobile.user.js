@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         히즈넷 모바일
 // @namespace    hisnet-mobile
-// @version      0.3.0
+// @version      0.4.0
 // @description  폰에서 히즈넷을 글씨 크고 옆으로 밀 일 없는 화면으로 바꿔 줍니다. 학교 공식 도구가 아니며, 개인정보를 모으거나 보내지 않습니다.
 // @match        https://hisnet.handong.edu/*
 // @run-at       document-start
@@ -162,7 +162,11 @@
     [/\/booking\/next_btn\./, '다음 두 달'],
     [/\/booking\/10day_prev2\./, '이전 10일'],
     [/\/booking\/10day_next2\./, '다음 10일'],
-    [/\/booking\/btn_apply\./, '예약 신청']
+    [/\/booking\/btn_apply\./, '예약 신청'],
+    [/\/2012_images\/public\/picview_excel_e\./, '엑셀로 저장'], // 개설시간표, 그림 글자 "Save as Excel" (2026-11-04)
+    // 학사정보 (F8, 그림 확인 2026-11-04)
+    [/\/haksa\/images\/list\.gif/, '검색'], // 등록금 납부 확인서 등. 그림 글자 "Search"
+    [/\/haksa\/images\/select\.png/, '선택'] // 전체성적조회: 학기별 성적 펼치기
   ];
 
   var FONT = '"Pretendard GOV", "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif';
@@ -217,6 +221,7 @@
   }
   // 화면 설정(viewport)을 정하는 문서: 바깥 문서 또는 프레임 묶음 안의 프레임 (숨은 칸 iframe은 아님)
   var OWNS_VIEWPORT = isTop() || frameKind() === 'FRAME';
+  var docWidth = 0; // 출력 서류 화면(doc)이 정함: 서류 폭(px)
 
   // 화면 설정은 맨 바깥 문서의 것이 쓰이므로, 프레임 안에서 바꿀 때도 바깥 문서를 고친다
   function setViewport(doc, mode, pageWidth) {
@@ -232,6 +237,9 @@
     }
     if (mode === 'original') {
       meta.setAttribute('content', 'width=' + Math.max(980, pageWidth || 0));
+    } else if (docWidth) {
+      // 출력 서류(F11): 원래 모양 그대로 폰 폭에 맞춰 축소, 손가락으로 확대 가능. 배율을 같이 줘야 처음부터 서류 전체가 보임
+      meta.setAttribute('content', 'width=' + docWidth + ', initial-scale=' + Math.floor(deviceWidth() / docWidth * 1000) / 1000);
     } else {
       meta.setAttribute('content', 'width=device-width, initial-scale=1');
     }
@@ -430,7 +438,7 @@
     'html:not(.hm-on) .hm-ui { display: none !important; }',
     'html.hm-wait > body { visibility: hidden !important; }',
     'html.hm-on { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }',
-    'html.hm-on a.hm-labeled > img { display: none !important; }',
+    'html.hm-on a.hm-labeled img { display: none !important; }', // <a><font><img> 처럼 한 겹 싸인 그림도 (전체성적 "선택")
     'html.hm-on .hm-orig-hidden { display: none !important; }',
     '.hm-icon { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }',
     '.hm-chevron { width: 20px; height: 20px; color: #6D7882; }',
@@ -442,6 +450,7 @@
     '  box-shadow: 0 6px 16px rgba(19,20,22,0.10), 0 2px 4px rgba(19,20,22,0.05);',
     '  transform: scale(var(--hm-z, 1)); transform-origin: 100% 100%; }',
     '#hm-toggle:focus-visible { outline: 2px solid #256EF4; outline-offset: 2px; }',
+    '@media print { .hm-ui, #hm-toggle { display: none !important; } }', // 인쇄·PDF 저장엔 우리 버튼이 안 나오게
 
     // 카드·탭·버튼 (DESIGN.md 히즈넷 모바일 적용 규칙)
     'html.hm-on .hm-card { box-sizing: border-box; background: #FFFFFF; border: 1px solid #CDD1D5; border-radius: 8px; padding: 20px 16px; margin: 0 0 12px; }',
@@ -955,10 +964,87 @@
     '  border: 0; border-radius: 8px; background: #256EF4; color: #FFFFFF; font-size: 17px; }'
   ].join('\n');
 
+  // F7 수업정보 · F8 학사정보 · F11 출력 서류
+  var CSS_STUDY = [
+    // 과목 카드: 핵심 칸(학점·교수·시간·강의실·성적)은 2열로 크게, 나머지는 작게 또는 "자세히" 안에
+    'html.hm-on .hm-cards-cap { margin: 8px 0 0; font-size: 17px; font-weight: 700; color: #131416; }',
+    'html.hm-on .hm-cards-cap * { font-size: 17px !important; font-weight: 700 !important; color: #131416 !important; }',
+    'html.hm-on .hm-crd-main { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; margin: 0 0 8px; }',
+    'html.hm-on .hm-crd-main .hm-crd-field { display: flex; flex-direction: column; gap: 0; }',
+    'html.hm-on .hm-content .hm-crd-main .hm-crd-value, html.hm-on .hm-content .hm-crd-main .hm-crd-value * { color: #131416; word-break: keep-all; overflow-wrap: anywhere; }',
+    'html.hm-on .hm-crd-more > summary { display: flex; align-items: center; min-height: 44px; font-size: 16px; color: #0B50D0; cursor: pointer; }',
+    'html.hm-on .hm-crd-more[open] > summary { margin: 0 0 4px; }',
+    // 개설시간표 검색 칸: 이름 | 입력 칸을 한 줄씩, 확인은 맨 아래 큰 버튼
+    'html.hm-on form.hm-csearch span.style1 { display: grid !important; grid-template-columns: 120px minmax(0, 1fr); align-items: center; gap: 8px; }',
+    'html.hm-on form.hm-csearch span.style1 > select, html.hm-on form.hm-csearch span.style1 > input { width: 100% !important; min-width: 0 !important; box-sizing: border-box; }',
+    'html.hm-on .hm-fit a.hm-csearch-go { display: flex !important; box-sizing: border-box; width: 100%; height: 48px; margin: 8px 0 16px; border-radius: 8px; background: #256EF4; }',
+    'html.hm-on .hm-fit a.hm-csearch-go .hm-img-label { color: #FFFFFF !important; font-weight: 700; font-size: 17px !important; }',
+    // 이름|값이 한 줄에 여러 쌍인 표(총 누적 성적 등): 두 쌍씩 한 줄로
+    'html.hm-on table.hm-pairs, html.hm-on table.hm-pairs > tbody { display: block !important; width: 100% !important; }',
+    'html.hm-on table.hm-pairs > tbody > tr { display: grid !important; height: auto !important; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr); }',
+    'html.hm-on table.hm-pairs > tbody > tr.hm-pairs-cap { display: block !important; padding: 8px 0; font-weight: 700; }',
+    'html.hm-on table.hm-pairs > tbody > tr > td { display: flex !important; align-items: center; justify-content: center; box-sizing: border-box;',
+    '  width: auto !important; height: auto !important; min-width: 0 !important; min-height: 44px; padding: 6px 4px !important; word-break: keep-all; overflow-wrap: anywhere; }',
+
+    // 내 시간표: 요일 탭 + 그날 수업 카드 (원래 표를 그대로 두고 보이는 칸만 바꿈)
+    'html.hm-on .hm-tt-tabs { display: flex; margin: 0 0 12px; border-bottom: 1px solid #CDD1D5; }',
+    'html.hm-on .hm-tt-tabs button { all: unset; box-sizing: border-box; flex: 1 1 0; min-width: 44px; min-height: 48px; text-align: center; cursor: pointer;',
+    '  font: 17px/48px ' + FONT + '; color: #6D7882; border-bottom: 3px solid transparent; margin-bottom: -1px; }',
+    'html.hm-on .hm-tt-tabs button.hm-tt-none { color: #B1B8BE; }',
+    'html.hm-on .hm-tt-tabs button[aria-selected="true"] { color: #0B50D0; border-bottom-color: #256EF4; font-weight: 700; }',
+    'html.hm-on .hm-tt-tabs button.hm-tt-all { flex: 1.6 1 0; }',
+    'html.hm-on .hm-tt-tabs button:focus-visible { outline: 2px solid #256EF4; outline-offset: -2px; }',
+    'html.hm-on .hm-tt-note { margin: 0 0 12px; padding: 12px 16px; border-radius: 8px; background: #F4F5F6; font-size: 16px; line-height: 1.5; color: #464C53; }',
+    'html.hm-on table.hm-tt { display: block !important; width: 100% !important; border: 0 !important; }',
+    'html.hm-on table.hm-tt > tbody { display: block !important; }',
+    'html.hm-on table.hm-tt > tbody > tr { display: none !important; }',
+    'html.hm-on table.hm-tt > tbody > tr.hm-tt-show { display: flex !important; gap: 12px; margin: 0 0 8px; padding: 12px 16px;',
+    '  border: 1px solid #CDD1D5; border-radius: 8px; background: #FFFFFF; }',
+    'html.hm-on table.hm-tt > tbody > tr.hm-tt-show > td { display: none !important; }',
+    'html.hm-on table.hm-tt > tbody > tr.hm-tt-show > td:first-child, html.hm-on table.hm-tt > tbody > tr.hm-tt-show > td.hm-tt-sel {',
+    '  display: block !important; width: auto !important; height: auto !important; padding: 0 !important; border: 0 !important; background: none !important; text-align: left !important; }',
+    'html.hm-on table.hm-tt > tbody > tr.hm-tt-show > td:first-child { flex: 0 0 72px; }',
+    'html.hm-on table.hm-tt > tbody > tr.hm-tt-show > td.hm-tt-sel { flex: 1 1 auto; min-width: 0; }',
+    'html.hm-on table.hm-tt td:first-child > :not(.hm-ui) { display: none !important; }',
+    'html.hm-on .hm-content table.hm-tt .hm-tt-p { display: block; font-size: 16px !important; font-weight: 700; line-height: 1.5 !important; color: #0B50D0; font-variant-numeric: tabular-nums; }',
+    'html.hm-on .hm-content table.hm-tt td.hm-tt-sel a { display: block !important; min-height: 44px; text-decoration: none !important; }',
+    // 과목 링크 뒤에 붙은 빈 링크 (위 a 규칙보다 우선순위가 높아야 함 — 낮으면 44px 빈칸이 남음, S24에서 발견)
+    'html.hm-on .hm-content table.hm-tt td.hm-tt-sel a:not(:has(*)), html.hm-on .hm-content table.hm-tt.hm-tt-week td a:not(:has(*)) { display: none !important; }',
+    'html.hm-on .hm-content table.hm-tt td.hm-tt-sel a font { font-size: 16px !important; line-height: 1.5 !important; color: #464C53 !important; }',
+    'html.hm-on .hm-content table.hm-tt td.hm-tt-sel a font:first-child { font-size: 17px !important; font-weight: 700; color: #131416 !important; }',
+    // 일주일 전체: 폰 폭에 맞춘 작은 표 (과목명만, 3줄까지). 칸을 누르면 그 요일 보기
+    'html.hm-on table.hm-tt.hm-tt-week { display: table !important; table-layout: fixed; border-collapse: collapse !important; }',
+    'html.hm-on table.hm-tt.hm-tt-week > tbody { display: table-row-group !important; }',
+    'html.hm-on table.hm-tt.hm-tt-week > tbody > tr { display: table-row !important; }',
+    'html.hm-on table.hm-tt.hm-tt-week > tbody > tr.hm-tt-tail { display: none !important; }',
+    'html.hm-on .hm-content table.hm-tt.hm-tt-week > tbody > tr > td { display: table-cell !important; width: auto !important; height: 44px !important; padding: 2px !important;',
+    '  vertical-align: middle; border: 1px solid #E6E8EA !important; font-size: 13px !important; line-height: 1.3 !important; overflow: hidden; }',
+    'html.hm-on .hm-content table.hm-tt.hm-tt-week > tbody > tr > td * { font-size: 13px !important; line-height: 1.3 !important; }',
+    'html.hm-on .hm-content table.hm-tt.hm-tt-week > tbody > tr > td:first-child { width: 28px !important; }',
+    'html.hm-on .hm-content table.hm-tt.hm-tt-week > tbody > tr:first-child > td { height: 32px !important; font-weight: 700; }',
+    'html.hm-on .hm-content table.hm-tt.hm-tt-week > tbody > tr > td.hm-tt-today { background: #ECF2FE !important; }',
+    'html.hm-on table.hm-tt.hm-tt-week.hm-tt-nosat > tbody > tr > td:nth-child(7) { display: none !important; }',
+    'html.hm-on table.hm-tt.hm-tt-week tr:first-child > td:first-child > :not(.hm-ui) { display: none !important; }',
+    'html.hm-on .hm-content table.hm-tt.hm-tt-week .hm-tt-p { font-size: 13px !important; color: #6D7882; text-align: center; }',
+    'html.hm-on .hm-content table.hm-tt.hm-tt-week a { display: block !important; min-height: 0; text-decoration: none !important; }',
+    'html.hm-on .hm-content table.hm-tt.hm-tt-week a > font ~ font, html.hm-on table.hm-tt.hm-tt-week a > br { display: none !important; }',
+    'html.hm-on .hm-content table.hm-tt.hm-tt-week a > font:first-child { display: -webkit-box !important; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;',
+    '  font-size: 13px !important; line-height: 1.3 !important; color: #131416 !important; word-break: break-all; }',
+    'html.hm-on .hm-content table.hm-tt.hm-tt-week td:has(a) { background: #F4F5F6 !important; cursor: pointer; }',
+
+    // 출력 서류 창(F11): 위에 인쇄 버튼 (서류는 원래 모양 그대로 축소)
+    'html.hm-on .hm-docbar { display: flex; gap: calc(8px * var(--hm-z, 1)); padding: calc(12px * var(--hm-z, 1)) calc(16px * var(--hm-z, 1)); margin: 0 0 calc(12px * var(--hm-z, 1));',
+    '  background: #F4F5F6; border-bottom: 1px solid #CDD1D5; font-family: ' + FONT + '; }',
+    'html.hm-on .hm-docbar button { all: unset; box-sizing: border-box; flex: 1 1 0; height: calc(48px * var(--hm-z, 1)); border-radius: calc(8px * var(--hm-z, 1)); text-align: center; cursor: pointer;',
+    '  font: 700 calc(17px * var(--hm-z, 1))/calc(48px * var(--hm-z, 1)) ' + FONT + '; background: #FFFFFF; color: #131416; border: 1px solid #CDD1D5; }',
+    'html.hm-on .hm-docbar button.hm-doc-print { flex: 2 1 0; background: #256EF4; color: #FFFFFF; border-color: #256EF4; }',
+    'html.hm-on .hm-docbar button:focus-visible { outline: 2px solid #256EF4; outline-offset: 2px; }'
+  ].join('\n');
+
   function addStyle() {
     var s = document.createElement('style');
     s.id = 'hm-style';
-    s.textContent = CSS_BASE + '\n' + CSS_LOGIN + '\n' + CSS_FRAME + '\n' + CSS_MAIN + '\n' + CSS_BOOK;
+    s.textContent = CSS_BASE + '\n' + CSS_LOGIN + '\n' + CSS_FRAME + '\n' + CSS_MAIN + '\n' + CSS_BOOK + '\n' + CSS_STUDY;
     (document.head || root).appendChild(s);
   }
 
@@ -969,17 +1055,42 @@
     return r.cells.length === 1 && !textOf(r) && !r.querySelector('img, input, a, select');
   }
 
-  // 데이터 표인지: 머리글 한 줄 + 같은 칸 수의 줄들, 병합·입력 칸·속 표 없음 (PRD F0)
+  // 머리글 칸 이름: 줄바꿈으로 나뉜 글자를 이어 붙임 ("영<br>어" → "영어").
+  // 한글 아래 영어 번역이 붙은 머리글("과목명<br>Course Title")은 한글만
+  function headLabel(c) {
+    var parts = [''];
+    var w = document.createTreeWalker(c, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    var n;
+    while ((n = w.nextNode())) {
+      if (n.nodeType === 1) {
+        if (n.tagName === 'BR') parts.push('');
+      } else {
+        parts[parts.length - 1] += n.nodeValue;
+      }
+    }
+    parts = parts.map(function (s) { return s.replace(/\s+/g, ' ').trim(); }).filter(Boolean);
+    if (parts.length > 1 && /[가-힣]/.test(parts[0]) && !/[가-힣]/.test(parts.slice(1).join(''))) return parts[0];
+    var allHangul = parts.every(function (s) { return /^[가-힣]+$/.test(s); });
+    return parts.join(allHangul ? '' : ' ');
+  }
+
+  // 데이터 표인지: (표 제목 한 줄) + 머리글 한 줄 + 같은 칸 수의 줄들, 병합·입력 칸·속 표 없음 (PRD F0)
   function dataTableInfo(t) {
     if (t.querySelector('table')) return null;
     if (t.querySelector('input:not([type="hidden"]), select, textarea, button')) return null;
     if (t.querySelector('[rowspan]:not([rowspan="1"])')) return null;
     var rows = [].slice.call(t.rows).filter(function (r) { return !isSeparator(r); });
+    var caption = null;
+    // 맨 윗줄이 칸 전체를 덮는 제목("2026-1 학기 성적")이고 그 아래가 머리글인 표
+    if (rows.length >= 3 && rows[0].cells.length === 1 && rows[1].cells.length >= 2 &&
+        rows[0].cells[0].colSpan === rows[1].cells.length && textOf(rows[0])) {
+      caption = rows.shift();
+    }
     if (rows.length < 2) return null;
     var head = rows[0];
     var n = head.cells.length;
     if (n < 2) return null;
-    var labels = [].map.call(head.cells, function (c) { return textOf(c); });
+    var labels = [].map.call(head.cells, headLabel);
     var named = labels.filter(function (s) { return s && s.length <= 30; }).length;
     if (named < n - 1 || head.querySelector('a, input')) return null;
     var body = rows.slice(1);
@@ -992,7 +1103,28 @@
       return null;
     }
     if (!full) return null;
-    return { head: head, body: body, labels: labels };
+    return { head: head, body: body, labels: labels, caption: caption };
+  }
+
+  // 이름|값|이름|값… 이 한 줄에 여러 쌍인 표 (총 누적 성적 등): 이름 칸끼리 같은 배경색, 값 칸은 다른 색
+  function pairTable(t) {
+    if (t.querySelector('table, input:not([type="hidden"]), select, textarea, button, [rowspan]:not([rowspan="1"])')) return false;
+    var rows = [].slice.call(t.rows).filter(function (r) { return !isSeparator(r); });
+    if (rows.length && rows[0].cells.length === 1 && textOf(rows[0])) rows.shift(); // 표 제목 줄
+    if (!rows.length || !rows[0].cells.length) return false; // 칸 없는 줄(<tr></tr>)이 있는 표 (등록금 납부 확인서 등)
+    var bg = function (c) { return (c.getAttribute('bgcolor') || '').toLowerCase() + '|' + c.className.replace(/\bhm-\S+/g, '').trim(); };
+    var labelBg = bg(rows[0].cells[0]);
+    return rows.every(function (r) {
+      var n = r.cells.length;
+      if (n < 4 || n % 2) return false;
+      for (var i = 0; i < n; i++) {
+        var c = r.cells[i];
+        if ((c.colSpan || 1) > 1) return false;
+        if ((i % 2 === 0) !== (bg(c) === labelBg)) return false;
+        if (i % 2 === 0 && !textOf(c)) return false;
+      }
+      return true;
+    });
   }
 
   function pickTitleColumn(info) {
@@ -1009,12 +1141,19 @@
   }
 
   // 데이터 표 → 카드: 칸 내용을 옮겨 담음(복제 X). 원래 표는 모바일에서만 숨김
-  function cardify(t, info, F) {
+  // opts.main: 이 머리글 칸은 제목 아래 2열로 크게 (과목 카드) / opts.more: 나머지 칸은 "자세히" 안에
+  function cardify(t, info, F, opts) {
+    opts = opts || {};
     var titleIdx = pickTitleColumn(info);
     var list = el('div', 'hm-cards');
     t.parentNode.insertBefore(list, t); // 같은 폼 안에 남도록 표 바로 앞에
     F.created.push(list);
     t.classList.add('hm-orig-hidden', 'hm-carded');
+    if (info.caption) {
+      var cap = el('div', 'hm-cards-cap');
+      moveChildren(info.caption.cells[0], cap, F.name);
+      list.appendChild(cap);
+    }
     info.body.forEach(function (r) {
       if (getComputedStyle(r).display === 'none') return;
       var card = el('div', 'hm-crd');
@@ -1028,6 +1167,7 @@
       var title = el('div', 'hm-crd-title');
       moveChildren(r.cells[titleIdx], title, F.name);
       card.appendChild(title);
+      var main = el('div', 'hm-crd-main');
       var fields = el('div', 'hm-crd-fields');
       for (var i = 0; i < r.cells.length; i++) {
         if (i === titleIdx) continue;
@@ -1038,9 +1178,17 @@
         var v = el('span', 'hm-crd-value');
         moveChildren(cell, v, F.name);
         f.appendChild(v);
-        fields.appendChild(f);
+        (opts.main && opts.main.test(info.labels[i]) ? main : fields).appendChild(f);
       }
-      if (fields.firstChild) card.appendChild(fields);
+      if (main.firstChild) card.appendChild(main);
+      if (fields.firstChild && opts.more) {
+        var more = el('details', 'hm-crd-more');
+        more.appendChild(el('summary', '', '자세히'));
+        more.appendChild(fields);
+        card.appendChild(more);
+      } else if (fields.firstChild) {
+        card.appendChild(fields);
+      }
       // 줄 전체를 누르면 이동하던 표: 카드를 눌러도 원래 줄을 누름
       if (r.getAttribute('onclick')) {
         card.classList.add('hm-clickable');
@@ -1067,7 +1215,7 @@
 
   // 카드로 바꾼 표(hm-carded)·화면별 코드가 직접 배치한 표(hm-own)는 자동 정리에서 뺌
   function handled(t) {
-    return t.classList.contains('hm-carded') || t.classList.contains('hm-own');
+    return t.classList.contains('hm-carded') || t.classList.contains('hm-own') || t.classList.contains('hm-pairs');
   }
 
   function fitWidth(scope, F) {
@@ -1087,8 +1235,13 @@
       });
     };
 
-    // 넓지 않아도 열이 4개 이상인 데이터 표는 카드로 (폰에서 칸이 너무 좁음)
+    // 넓지 않아도 열이 4개 이상인 데이터 표는 카드로 (폰에서 칸이 너무 좁음). 이름|값 쌍 표는 두 쌍씩 한 줄로
     tables().forEach(function (t) {
+      if (pairTable(t)) { // 첫 줄이 머리글처럼 보여도 이름|값 쌍이면 쌍 표로
+        t.classList.add('hm-pairs');
+        if (t.rows[0].cells.length === 1) t.rows[0].classList.add('hm-pairs-cap');
+        return;
+      }
       var info = dataTableInfo(t);
       if (info && info.labels.length >= 4) cardify(t, info, F);
     });
@@ -1218,6 +1371,8 @@
       });
       list.appendChild(card);
     });
+    // 글이 하나도 없는 게시판(원래는 머리글 줄만 보임, 과목 공지에 많음)
+    if (!list.firstChild) list.appendChild(el('div', 'hm-post hm-post-note', '등록된 글이 없습니다.'));
     return true;
   }
 
@@ -1400,6 +1555,180 @@
     return true;
   }
 
+  // 화면 맨 위 큰 제목 그림 줄 (위쪽 바에 화면 이름이 있으므로 모바일에선 숨김). 그림만 있는 줄일 때만
+  function hideTitleBanner(content) {
+    var img = content.querySelector('img[src*="/student/title_s_"]');
+    var tr = img && img.closest('tr');
+    if (!tr || !content.contains(tr) || textOf(tr) || tr.querySelectorAll('img').length !== 1) return;
+    tr.classList.add('hm-orig-hidden');
+    var prev = tr.previousElementSibling;
+    if (prev && !textOf(prev) && !prev.querySelector('img, input, select, a')) prev.classList.add('hm-orig-hidden');
+  }
+
+  // ---- F7 수업정보 · F8 학사정보 ----
+  // 과목 카드: 과목명이 제목, 학점·교수·시간·강의실·성적은 크게 (PRD F7·F8). more: 나머지 칸을 "자세히" 안에
+  var COURSE_TITLE = /^(과목명|교과목명|course title)$/i;
+  var COURSE_MAIN = /^(분반|학점|담당교수|교수|수업시간|시간|강의실|성적|평점|section|credits?|professor|period|classroom|grade)$/i;
+  var COURSE_PAGES = {
+    '/haksa/lecture/HLEC110M.php': { more: false }, // 수강내역
+    '/for_student/course/PLES330M.php': { more: true }, // 개설시간표 (19칸)
+    '/for_student/course/PLES330M_GS.php': { more: true },
+    '/haksa/record/HREC110M.php': { more: false } // 전체성적: 학기별 성적 (처음엔 숨어 있음)
+  };
+
+  function courseCards(content, F, opts) {
+    if (opts.more) {
+      // 개설시간표: 검색 칸 9개(3×3 표)와 안내 | 엑셀 줄을 세로로 (PRD F7)
+      var form = document.forms.form1;
+      if (form && content.contains(form)) {
+        [].forEach.call(form.querySelectorAll('table'), function (t) { t.classList.add('hm-block'); });
+        form.classList.add('hm-csearch');
+        var go = form.querySelector('a[href="javascript:sendit()"]'); // "확인": 원래는 칸 사이에 있음 → 검색 칸 맨 아래로
+        if (go) {
+          go.classList.add('hm-csearch-go');
+          moveTo(go, form, F.name);
+        }
+      }
+      var excel = content.querySelector('img[src*="picview_excel"]');
+      if (excel && excel.closest('table')) excel.closest('table').classList.add('hm-block');
+    }
+    [].forEach.call(content.querySelectorAll('table'), function (t) {
+      if (handled(t) || t.closest('.hm-ui')) return;
+      var info = dataTableInfo(t);
+      if (!info || info.labels.length < 4 || !info.labels.some(function (s) { return COURSE_TITLE.test(s); })) return;
+      cardify(t, info, F, { main: COURSE_MAIN, more: opts.more });
+    });
+  }
+
+  // 내 시간표 (/for_student/course/HLES110M.php): 교시(줄) × 요일(칸) 표.
+  // 원래 표·링크는 그대로 두고 보이는 칸만 바꿈 → 요일 탭(오늘 먼저) + 그날 수업 카드, "일주일 전체"는 폰 폭에 맞춘 작은 표
+  var DAY_HEAD = [/^(시간|time)$/i, /^(월|mon)/i, /^(화|tue)/i, /^(수|wed)/i, /^(목|thu)/i, /^(금|fri)/i, /^(토|sat)/i];
+  var DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
+
+  function timetable(content, F) {
+    var t = [].filter.call(content.querySelectorAll('table'), function (x) {
+      var h = x.rows[0];
+      return h && h.cells.length === 7 && [].every.call(h.cells, function (c, i) { return DAY_HEAD[i].test(textOf(c)); });
+    })[0];
+    if (!t || t.rows.length < 2) return false;
+    var rows = [].slice.call(t.rows, 1);
+    if (!rows.every(function (r) { return r.cells.length === 7; })) return false;
+    var key = function (cell) {
+      var a = cell.querySelector('a[href]');
+      return a ? a.getAttribute('href') + '|' + textOf(cell) : '';
+    };
+    var labels = rows.map(function (r) {
+      var s = el('span', 'hm-tt-p');
+      r.cells[0].insertBefore(s, r.cells[0].firstChild);
+      F.created.push(s);
+      return { span: s, name: textOf(r.cells[0]).replace(/\s+/g, ''), num: (/\d+/.exec(textOf(r.cells[0])) || [''])[0] };
+    });
+    var has = [false];
+    var last = 0;
+    for (var d = 1; d <= 6; d++) {
+      has[d] = false;
+      for (var i = 0; i < rows.length; i++) {
+        if (!key(rows[i].cells[d])) continue;
+        has[d] = true;
+        last = Math.max(last, i);
+      }
+    }
+    // 일주일 표: 마지막 수업 뒤 빈 교시는 숨김, 토요일 수업이 없으면 토요일 칸도
+    rows.forEach(function (r, i) { if (i > last) r.classList.add('hm-tt-tail'); });
+    if (!has[6]) t.classList.add('hm-tt-nosat');
+    var today = new Date().getDay(); // 0 = 일요일, 1~6 = 월~토 = 표의 칸 번호
+    if (today >= 1 && today <= 6) {
+      [].forEach.call(t.rows, function (r) { if (r.cells[today]) r.cells[today].classList.add('hm-tt-today'); });
+    }
+
+    var tabs = el('div', 'hm-tt-tabs');
+    tabs.setAttribute('role', 'tablist');
+    tabs.setAttribute('aria-label', '요일');
+    var note = el('p', 'hm-tt-note');
+    var buttons = [];
+    var week = false;
+    var cur = 0;
+
+    var show = function (day, msg) {
+      cur = day;
+      week = !day;
+      t.classList.toggle('hm-tt-week', week);
+      buttons.forEach(function (b) { b.setAttribute('aria-selected', String(+b.getAttribute('data-day') === day)); });
+      var shown = 0;
+      rows.forEach(function (r, i) {
+        var cell = r.cells[day];
+        [].forEach.call(r.cells, function (c) { c.classList.remove('hm-tt-sel'); });
+        var k = week ? '' : key(cell);
+        var cont = k && i > 0 && key(rows[i - 1].cells[day]) === k; // 앞 교시와 같은 수업 → 한 카드로
+        r.classList.toggle('hm-tt-show', !!k && !cont);
+        if (week) {
+          labels[i].span.textContent = labels[i].num;
+          return;
+        }
+        if (!k || cont) return;
+        cell.classList.add('hm-tt-sel');
+        var end = i;
+        while (end + 1 < rows.length && key(rows[end + 1].cells[day]) === k) end++;
+        labels[i].span.textContent = end > i ? labels[i].num + '–' + labels[end].name : labels[i].name;
+        shown++;
+      });
+      var text = msg || (!week && !shown ? DAY_NAMES[day] + '요일에는 수업이 없습니다.' : '');
+      note.textContent = text;
+      note.hidden = !text;
+    };
+
+    for (var day = 1; day <= 6; day++) {
+      if (day === 6 && !has[6]) continue;
+      var b = el('button', has[day] ? '' : 'hm-tt-none', DAY_NAMES[day]);
+      b.type = 'button';
+      b.setAttribute('role', 'tab');
+      b.setAttribute('data-day', String(day));
+      b.setAttribute('aria-label', DAY_NAMES[day] + '요일' + (has[day] ? '' : ', 수업 없음'));
+      b.addEventListener('click', function (e) { show(+e.currentTarget.getAttribute('data-day')); });
+      tabs.appendChild(b);
+      buttons.push(b);
+    }
+    var all = el('button', 'hm-tt-all', '일주일');
+    all.type = 'button';
+    all.setAttribute('role', 'tab');
+    all.setAttribute('data-day', '0');
+    all.setAttribute('aria-label', '일주일 전체 보기');
+    all.addEventListener('click', function () { show(0); });
+    tabs.appendChild(all);
+    buttons.push(all);
+
+    // 일주일 표에서 칸을 누르면 그 요일 보기 (과목 공지 링크는 요일 보기의 카드에서 누름)
+    t.addEventListener('click', function (e) {
+      if (!week) return;
+      var cell = e.target.closest('td');
+      if (!cell || cell.cellIndex < 1 || !key(cell)) return;
+      e.preventDefault();
+      show(cell.cellIndex);
+      tabs.scrollIntoView({ block: 'nearest' });
+    }, true);
+
+    t.parentNode.insertBefore(tabs, t);
+    t.parentNode.insertBefore(note, t);
+    F.created.push(tabs, note);
+
+    // 오늘 먼저. 오늘 수업이 없으면 다음 수업일을 보여 주고 안내
+    var first = today >= 1 && today <= 6 && has[today] ? today : 0;
+    if (!first) {
+      for (var k = 1; k <= 6 && !first; k++) {
+        var cand = (today + k) % 7;
+        if (cand >= 1 && has[cand]) first = cand;
+      }
+      if (first) show(first, '오늘(' + DAY_NAMES[today] + ')은 수업이 없습니다. 다음 수업일인 ' + DAY_NAMES[first] + '요일을 보여 드립니다.');
+      else show(0);
+    } else {
+      show(first);
+    }
+    // 다 만든 뒤에 표 모양을 바꿈 (중간에 실패하면 표는 자동 정리로)
+    t.classList.add('hm-tt');
+    own(t);
+    return true;
+  }
+
   // ---- 4. 화면별 꾸미기 ----
   // 각 화면 함수는 필요한 요소가 없으면 false를 돌려주고 아무것도 바꾸지 않는다 (PRD 7-5)
   var screens = [];
@@ -1535,10 +1864,13 @@
     }
   });
 
+  // 바닥글: 보통 body 바로 아래 표, 폼·div로 감싼 화면도 있음 (등록금 납부 확인서). 바닥글 표시를 품은 가장 바깥 표
   function findFooter() {
-    var bodyTables = document.querySelectorAll('body > table');
-    for (var b = bodyTables.length - 1; b >= 0; b--) {
-      if (bodyTables[b].querySelector('.btn_sm_tail, img[src*="copyright"]')) return bodyTables[b];
+    var marks = document.querySelectorAll('.btn_sm_tail, img[src*="copyright"]');
+    for (var b = marks.length - 1; b >= 0; b--) {
+      var t = marks[b].closest('table');
+      while (t && t.parentNode.closest('table')) t = t.parentNode.closest('table');
+      if (t && !t.querySelector('#div_TopmenuBg, table[width="1000"]')) return t;
     }
     return null;
   }
@@ -1713,8 +2045,47 @@
     }
   });
 
-  // 시설예약의 이용안내 칸(infoFrame)·패널티 정보 새 창과 그 안의 벌점 목록: 문서 하나를 폭 맞춤
-  var PLAIN_PAGES = ['/prof/booking/PSTU420N.php', '/prof/booking/PSTU422P.php', '/prof/booking/PSTU422L.php'];
+  // F11 출력 서류 새 창 (등록금 고지서): 서류는 원래 모양이 중요하므로 재배치하지 않고
+  // 화면 설정 폭을 서류 폭으로 → 폰 폭에 맞춰 축소, 손가락으로 확대 가능. 위에 인쇄(PDF 저장) 버튼.
+  // HREG220P는 고지서 선택 창(HREG210M)의 "등록금 고지서 출력"(POST 제출)으로만 열려 아직 실제 화면 확인 전 (폭을 못 정하면 손대지 않음)
+  var DOC_PAGES = ['/haksa/regist/HREG220P.php'];
+  screens.push({
+    name: 'doc',
+    cls: 'hm-p-doc',
+    match: function () { return DOC_PAGES.indexOf(PATH) !== -1 && isTop(); },
+    run: function (F) {
+      var body = document.body;
+      if (!body.querySelector('table')) return false;
+      var w = 0;
+      [].forEach.call(body.querySelectorAll('[width], [style*="width"]'), function (e) {
+        var a = e.getAttribute('width') || '';
+        var s = /(^|;)\s*width\s*:\s*(\d+)px/i.exec(e.getAttribute('style') || '');
+        if (!/%/.test(a)) w = Math.max(w, parseInt(a, 10) || 0);
+        if (s) w = Math.max(w, +s[2]);
+      });
+      if (w < 320 || w > 1200) return false;
+      docWidth = w + 24;
+      var bar = el('div', 'hm-docbar');
+      var print = el('button', 'hm-doc-print', '인쇄 · PDF 저장');
+      print.type = 'button';
+      print.addEventListener('click', function () { window.print(); });
+      bar.appendChild(print);
+      if (window.opener) { // 히즈넷이 띄운 창이면 닫기 (폰에선 새 탭으로 열림)
+        var close = el('button', '', '닫기');
+        close.type = 'button';
+        close.addEventListener('click', function () { window.close(); });
+        bar.appendChild(close);
+      }
+      body.insertBefore(bar, body.firstChild);
+      F.created.push(bar);
+      return true;
+    }
+  });
+
+  // 문서 하나를 폭 맞춤하는 새 창·칸: 시설예약의 이용안내 칸(infoFrame)·패널티 정보 창·벌점 목록,
+  // 로그인 화면의 아이디·비밀번호 찾기 창, 등록금 고지서 선택 창(HREG210M, 예전 것 HREG200M)
+  var PLAIN_PAGES = ['/prof/booking/PSTU420N.php', '/prof/booking/PSTU422P.php', '/prof/booking/PSTU422L.php', '/login/findID.php', '/login/resetPwd.php',
+    '/haksa/regist/HREG210M.php', '/haksa/regist/HREG200M.php'];
   screens.push({
     name: 'plain',
     cls: 'hm-p-plain',
@@ -1765,9 +2136,10 @@
           buildSitemap(F, content);
         } catch (e) { /* 전체 메뉴 꾸미기만 포기, 원래 사이트맵 표는 아래 자동 정리로 */ }
       }
-      if (PATH === '/myboard/list.php' || PATH === '/myboard/read.php') {
+      // 공지 게시판 + (v0.4.0) 과목 공지 게시판(/cis/, 내 시간표·메인의 과목 링크) — 머리글이 같음
+      if (/^\/(myboard|cis)\/(list|read)\.php$/.test(PATH)) {
         try {
-          if (PATH === '/myboard/list.php') boardTools(content, F); // 글 읽기 화면에선 검색이 글 위로 오면 안 됨
+          if (/\/list\.php$/.test(PATH)) boardTools(content, F); // 글 읽기 화면에선 검색이 글 위로 오면 안 됨
           boardList(content, F); // 글 읽기 화면 아래에도 같은 목록이 있음
         } catch (e) { /* 게시판 꾸미기만 포기, 목록 표는 아래 자동 정리로 */ }
       }
@@ -1776,6 +2148,19 @@
           bookingMain(content, F);
         } catch (e) { /* 시설예약 꾸미기만 포기, 아래 자동 정리로 */ }
       }
+      if (PATH === '/for_student/course/HLES110M.php') {
+        try {
+          timetable(content, F);
+        } catch (e) { /* 시간표 꾸미기만 포기, 아래 자동 정리로 */ }
+      }
+      if (COURSE_PAGES[PATH]) {
+        try {
+          courseCards(content, F, COURSE_PAGES[PATH]);
+        } catch (e) { /* 과목 카드만 포기, 아래 자동 정리로 */ }
+      }
+      try {
+        hideTitleBanner(content);
+      } catch (e) { /* 무시 */ }
 
       if (subCell) fitWidth(subCell, F);
       fitWidth(content, F);
@@ -1798,6 +2183,14 @@
         if (!img.complete) img.addEventListener('load', refit);
       });
       window.addEventListener('load', refit);
+      // 숨어 있던 부분이 원래 스크립트로 보이게 되면(display 바꿈) 그 안의 표도 맞춤 (전체성적의 학기별 성적 등)
+      if (window.MutationObserver) {
+        new MutationObserver(function (list) {
+          for (var m = 0; m < list.length; m++) {
+            if (!list[m].target.closest('.hm-ui')) { refit(); return; }
+          }
+        }).observe(content, { attributes: true, attributeFilter: ['style'], subtree: true });
+      }
       return true;
     }
   });
@@ -1806,7 +2199,7 @@
   function sameLink(a) {
     try {
       var u = new URL(a.href, location.href);
-      var here0 = location.pathname === '/myboard/read.php' ? '/myboard/list.php' : location.pathname; // 글 읽기도 그 게시판 이름으로
+      var here0 = location.pathname.replace(/^\/(myboard|cis)\/read\.php$/, '/$1/list.php'); // 글 읽기도 그 게시판 이름으로
       if (u.pathname !== here0) return false;
       var here = new URLSearchParams(location.search).get('Board');
       return (u.searchParams.get('Board') || null) === (here || null);
@@ -2071,8 +2464,8 @@
     }
     var pageWidth = root.scrollWidth;
     if (recognized) setOwnViewport(mobile ? 'mobile' : 'original', pageWidth);
-    // 원래 화면에서는 페이지가 기기 폭에 맞춰 축소되므로 버튼을 그만큼 키움
-    var z = mobile || !recognized ? 1 : Math.max(1, Math.max(980, pageWidth) / deviceWidth());
+    // 원래 화면(과 축소해서 보여 주는 출력 서류)에서는 페이지가 기기 폭에 맞춰 축소되므로 버튼을 그만큼 키움
+    var z = !recognized ? 1 : mobile ? Math.max(1, (docWidth || 0) / deviceWidth()) : Math.max(1, Math.max(980, pageWidth) / deviceWidth());
     root.style.setProperty('--hm-z', String(z));
     var btn = document.getElementById('hm-toggle');
     if (btn) btn.textContent = mobile ? '원래 화면' : '모바일 화면';
